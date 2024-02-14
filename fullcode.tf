@@ -59,6 +59,45 @@ resource "aws_route_table_association" "public_subnet_association" {
   route_table_id = aws_route_table.public_route_table.id
 }
 
+# Create Network ACL
+resource "aws_network_acl" "private_nacl" {
+  vpc_id = aws_vpc.my_vpc.id
+
+  tags = {
+    Name = "Private_NACL"
+  }
+}
+
+# Define inbound and outbound rules for the private NACL
+resource "aws_network_acl_rule" "private_nacl_inbound" {
+  network_acl_id = aws_network_acl.private_nacl.id
+  rule_number    = 100
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "10.0.1.0/24"
+  from_port      = 1024
+  to_port        = 65535
+  egress         = false
+}
+
+resource "aws_network_acl_rule" "private_nacl_outbound" {
+  network_acl_id = aws_network_acl.private_nacl.id
+  rule_number    = 100
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "10.0.1.0/24"
+  from_port      = 1024
+  to_port        = 65535
+  egress         = true
+}
+
+# Associate private NACL with private subnet
+resource "aws_subnet_network_acl_association" "private_nacl_association" {
+  subnet_id      = aws_subnet.private_subnet.id
+  network_acl_id = aws_network_acl.private_nacl.id
+}
+
+
 # Security Group
 resource "aws_security_group" "ec2_security_group" {
   name        = "ec2_security_group"
@@ -66,8 +105,9 @@ resource "aws_security_group" "ec2_security_group" {
   vpc_id      = aws_vpc.my_vpc.id
 
   ingress {
-    from_port = 22
-    to_port   = 22
+    description = "HTTP from VPC"
+    from_port = 80
+    to_port   = 80
     protocol  = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -94,5 +134,18 @@ resource "aws_instance" "my_instance" {
 
   tags = {
     Name = "MyEC2Instance"
+  }
+}
+# Create ALB
+resource "aws_lb" "test" {
+  name               = "test-lb-tf"
+  internal           = false
+  load_balancer_type = "network"
+  subnets            = [aws_subnet.public_subnet.id,aws_subnet.private_subnet.id ]
+
+  enable_deletion_protection = true
+
+  tags = {
+    Environment = "production"
   }
 }
